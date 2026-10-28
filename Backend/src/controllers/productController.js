@@ -1,0 +1,236 @@
+const Product = require('../models/Product');
+const Category = require('../models/Category');
+const logger = require('../utils/logger');
+
+// Get all products with filtering, sorting, and pagination
+exports.getProducts = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, category, size, color, minPrice, maxPrice, sort = 'createdAt_desc', search, status } = req.query;
+
+    // Build filter object
+    const filter = {};
+
+    if (status) {
+      filter.status = status;
+    } else {
+      filter.status = { $ne: 'sold' };
+    }
+
+    if (category) {
+      filter.category = category;
+    }
+
+    if (size) {
+      filter.sizes = { $in: Array.isArray(size) ? size : [size] };
+    }
+
+    if (color) {
+      filter.colors = { $in: Array.isArray(color) ? color : [color] };
+    }
+
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = parseFloat(minPrice);
+      if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+    }
+
+    if (search) {
+      filter.$text = { $search: search };
+    }
+
+    // Parse sort parameter
+    const sortObj = {};
+    const [sortField, sortOrder] = sort.split('_');
+    sortObj[sortField] = sortOrder === 'asc' ? 1 : -1;
+
+    // Calculate pagination
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get products
+    const products = await Product.find(filter)
+      .populate('category', 'name slug')
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limitNum);
+
+    // Get total count
+    const totalProducts = await Product.countDocuments(filter);
+    const totalPages = Math.ceil(totalProducts / limitNum);
+
+    // Get facets (available filters)
+    const facets = {
+      categories: await Product.aggregate([
+        { $match: filter },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+      ]),
+      sizes: await Product.aggregate([
+        { $match: filter },
+        { $unwind: '$sizes' },
+        { $group: { _id: '$sizes', count: { $sum: 1 } } },
+      ]),
+      colors: await Product.aggregate([
+        { $match: filter },
+        { $unwind: '$colors' },
+        { $group: { _id: '$colors', count: { $sum: 1 } } },
+      ]),
+    };
+
+    res.status(200).json({
+      products,
+      totalProducts,
+      totalPages,
+      currentPage: pageNum,
+      facets,
+    });
+  } catch (error) {
+    logger.error(`Error fetching products: ${error.message}`);
+    res.status(500).json({
+      statusCode: 500,
+      message: 'Error fetching products',
+      error: error.message,
+    });
+  }
+};
+
+// Get single product by ID
+exports.getProductById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const product = await Product.findById(id).populate('category', 'name slug');
+
+    if (!product) {
+      return res.status(404).json({
+        statusCode: 404,
+        message: 'Product not found',
+      });
+    }
+
+    res.status(200).json(product);
+  } catch (error) {
+    logger.error(`Error fetching product: ${error.message}`);
+    res.status(500).json({
+      statusCode: 500,
+      message: 'Error fetching product',
+      error: error.message,
+    });
+  }
+};
+
+// Create product (admin only)
+exports.createProduct = async (req, res, next) => {
+  try {
+    const { name, description, price, originalPrice, discount, category, images, sizes, colors, stock, brand, status } = req.body;
+
+    const categoryValue = typeof category === 'string' ? category : category?.toString();
+
+    if (!categoryValue) {
+      return res.status(400).json({
+        statusCode: 400,
+        message: 'Category is required.',
+      });
+    }
+
+    let categoryExists = await Category.findById(categoryValue);
+    if (!categoryExists) {
+      categoryExists = await Category.findOne({ slug: categoryValue.toLowerCase().replace(/\s+/g, '-') });
+    }
+
+    if (!categoryExists) {
+      return res.status(404).json({
+        statusCode: 404,
+        message: 'Category not found. Create it from the admin category settings first.',
+      });
+    }
+
+    const product = new Product({
+      name,
+      description,
+      price,
+      originalPrice,
+      discount,
+      category: categoryExists._id,
+      images: Array.isArray(images) ? images : [],
+      sizes: Array.isArray(sizes) ? sizes : [],
+      colors: Array.isArray(colors) ? colors : [],
+      stock,
+      brand,
+      status: status || 'active',
+    });
+
+    await product.save();
+
+    res.status(201).json({
+      statusCode: 201,
+      message: 'Product created successfully',
+      product,
+    });
+  } catch (error) {
+    logger.error(`Error creating product: ${error.message}`);
+    res.status(500).json({
+      statusCode: 500,
+      message: 'Error creating product',
+      error: error.message,
+    });
+  }
+};
+
+// Update product (admin only)
+exports.updateProduct = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const product = await Product.findByIdAndUpdate(id, updates, { new: true, runValidators: true }).populate('category', 'name slug');
+
+    if (!product) {
+      return res.status(404).json({
+        statusCode: 404,
+        message: 'Product not found',
+      });
+    }
+
+    res.status(200).json({
+      statusCode: 200,
+      message: 'Product updated successfully',
+      product,
+    });
+  } catch (error) {
+    logger.error(`Error updating product: ${error.message}`);
+    res.status(500).json({
+      statusCode: 500,
+      message: 'Error updating product',
+      error: error.message,
+    });
+  }
+};
+
+// Delete product (admin only)
+exports.deleteProduct = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const product = await Product.findByIdAndDelete(id);
+
+    if (!product) {
+      return res.status(404).json({
+        statusCode: 404,
+        message: 'Product not found',
+      });
+    }
+
+    res.status(200).json({
+      statusCode: 200,
+      message: 'Product deleted successfully',
+    });
+  } catch (error) {
+    logger.error(`Error deleting product: ${error.message}`);
+    res.status(500).json({
+      statusCode: 500,
+      message: 'Error deleting product',
+      error: error.message,
+    });
+  }
+};
