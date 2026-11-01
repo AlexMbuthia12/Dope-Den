@@ -5,9 +5,20 @@ const logger = require('../utils/logger');
 // Get all products with filtering, sorting, and pagination
 exports.getProducts = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, category, size, color, minPrice, maxPrice, sort = 'createdAt_desc', search, status } = req.query;
+    const { 
+      page = 1, 
+      limit = 69, 
+      category, 
+      size, 
+      color, 
+      minPrice, 
+      maxPrice, 
+      sort = 'createdAt_desc', 
+      search, 
+      status, 
+      section 
+    } = req.query;
 
-    // Build filter object
     const filter = {};
 
     if (status) {
@@ -18,6 +29,10 @@ exports.getProducts = async (req, res, next) => {
 
     if (category) {
       filter.category = category;
+    }
+
+    if (section) {
+      filter.section = section;
     }
 
     if (size) {
@@ -44,45 +59,32 @@ exports.getProducts = async (req, res, next) => {
     sortObj[sortField] = sortOrder === 'asc' ? 1 : -1;
 
     // Calculate pagination
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 10;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    
+    // ENFORCE HARD CAP: Max 69 items per request (24 catalog + 45 deals limit)
+    const MAX_ALLOWED_LIMIT = 69; // 24 + 45
+    const requestedLimit = parseInt(limit, 10) || 69;
+    const limitNum = Math.min(Math.max(1, requestedLimit), MAX_ALLOWED_LIMIT);
+    
     const skip = (pageNum - 1) * limitNum;
 
-    // Get products
+    // Execute query with max cap enforced
     const products = await Product.find(filter)
       .populate('category', 'name slug')
       .sort(sortObj)
       .skip(skip)
       .limit(limitNum);
 
-    // Get total count
+    // Get total count for metadata
     const totalProducts = await Product.countDocuments(filter);
     const totalPages = Math.ceil(totalProducts / limitNum);
-
-    // Get facets (available filters)
-    const facets = {
-      categories: await Product.aggregate([
-        { $match: filter },
-        { $group: { _id: '$category', count: { $sum: 1 } } },
-      ]),
-      sizes: await Product.aggregate([
-        { $match: filter },
-        { $unwind: '$sizes' },
-        { $group: { _id: '$sizes', count: { $sum: 1 } } },
-      ]),
-      colors: await Product.aggregate([
-        { $match: filter },
-        { $unwind: '$colors' },
-        { $group: { _id: '$colors', count: { $sum: 1 } } },
-      ]),
-    };
 
     res.status(200).json({
       products,
       totalProducts,
       totalPages,
       currentPage: pageNum,
-      facets,
+      limitApplied: limitNum,
     });
   } catch (error) {
     logger.error(`Error fetching products: ${error.message}`);
@@ -122,7 +124,7 @@ exports.getProductById = async (req, res, next) => {
 // Create product (admin only)
 exports.createProduct = async (req, res, next) => {
   try {
-    const { name, description, price, originalPrice, discount, category, images, sizes, colors, stock, brand, status } = req.body;
+    const { name, description, price, originalPrice, discount, category, images, sizes, colors, stock, brand, status, section } = req.body;
 
     const categoryValue = typeof category === 'string' ? category : category?.toString();
 
@@ -158,6 +160,7 @@ exports.createProduct = async (req, res, next) => {
       stock,
       brand,
       status: status || 'active',
+      section: section || 'catalog', // Default to 'catalog' if not provided
     });
 
     await product.save();

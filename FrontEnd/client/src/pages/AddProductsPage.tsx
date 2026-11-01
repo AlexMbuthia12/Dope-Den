@@ -13,6 +13,7 @@ type CategoryOption = {
 };
 
 type ProductStatus = "active" | "sold";
+type ProductSection = "catalog" | "deal"; // CHANGED: Added section type to differentiate standard catalog vs Deals of the Month
 
 type ProductFormState = {
   name: string;
@@ -26,6 +27,7 @@ type ProductFormState = {
   stock: string;
   brand: string;
   status: ProductStatus;
+  section: ProductSection; // CHANGED: Included section in form state
 };
 
 type ProductPayload = {
@@ -41,6 +43,7 @@ type ProductPayload = {
   stock: number;
   brand?: string | null;
   status?: ProductStatus;
+  section?: ProductSection; // CHANGED: Included section in backend payload
 };
 
 export default function AddProductsPage() {
@@ -60,6 +63,7 @@ export default function AddProductsPage() {
     stock: "10",
     brand: "DopeDen",
     status: "active",
+    section: "catalog", // CHANGED: Default new products to standard catalog
   });
 
   const standardSizes = ["XS", "S", "S/M", "M", "M/L", "L", "XL", "XXL", "N/A"];
@@ -133,9 +137,7 @@ export default function AddProductsPage() {
             });
 
             const payload = await response.json();
-            if (!response.ok) {
-              return null;
-            }
+            if (!response.ok) return null;
 
             const uploadResponse = await fetch(payload.uploadUrl, {
               method: "PUT",
@@ -143,9 +145,7 @@ export default function AddProductsPage() {
               body: file,
             });
 
-            if (!uploadResponse.ok) {
-              return null;
-            }
+            if (!uploadResponse.ok) return null;
 
             return payload.finalImageUrl;
           } catch {
@@ -156,12 +156,6 @@ export default function AddProductsPage() {
 
       const validCloudUrls = cloudReadyFiles.filter((value): value is string => Boolean(value));
       setImageUrls((current) => [...current, ...validCloudUrls]);
-
-      if (validCloudUrls.length === 0) {
-        setMessage("Local image previews are ready and will be stored in MongoDB as data URLs.");
-      } else {
-        setMessage("Images are ready. Cloud URLs were saved when available; local previews remain stored in MongoDB.");
-      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Image processing failed");
     } finally {
@@ -200,6 +194,7 @@ export default function AddProductsPage() {
         stock: Number(form.stock),
         brand: form.brand || "DopeDen",
         status: form.status,
+        section: form.section, // CHANGED: Pass selected store section (catalog vs deal) to backend
       };
 
       await apiJson("/products", {
@@ -218,30 +213,62 @@ export default function AddProductsPage() {
   };
 
   return (
-    <DefaultLayout title="Add Product" subtitle="Create inventory entries for the storefront">
-      <div className="mx-auto max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-sm">
+    <DefaultLayout title="Add Product" subtitle="Create inventory entries for storefront or Deals of the Month">
+      <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-sm">
         {!isAdmin ? (
-          <div className="mb-6 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+          <div className="mb-6 rounded-xl border border-dashed border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm text-amber-800 dark:text-amber-300">
             You need an admin account to create products. Please sign in from the profile page first.
           </div>
         ) : null}
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          
+          {/* CHANGED: Product Section Selector (Catalog vs Deals of the Month) */}
+          <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-4">
+            <label className="block text-sm font-bold text-slate-900 dark:text-white mb-2">
+              Store Placement Section
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, section: "catalog" }))}
+                className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  form.section === "catalog"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                    : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                Standard Catalog
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, section: "deal" }))}
+                className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  form.section === "deal"
+                    ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
+                    : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                🔥 Deal of the Month
+              </button>
+            </div>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Product name</span>
-              <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required />
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Product name</span>
+              <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required className="rounded-xl" />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Brand</span>
-              <Input value={form.brand} onChange={(event) => setForm((prev) => ({ ...prev, brand: event.target.value }))} />
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Brand</span>
+              <Input value={form.brand} onChange={(event) => setForm((prev) => ({ ...prev, brand: event.target.value }))} className="rounded-xl" />
             </label>
           </div>
 
           <label className="block text-sm">
-            <span className="mb-1 block text-muted-foreground">Description</span>
+            <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Description</span>
             <textarea
-              className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="min-h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500"
               value={form.description}
               onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
               required
@@ -250,24 +277,24 @@ export default function AddProductsPage() {
 
           <div className="grid gap-4 md:grid-cols-3">
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Price</span>
-              <Input type="number" value={form.price} onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))} required />
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Price</span>
+              <Input type="number" value={form.price} onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))} required className="rounded-xl" />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Original price</span>
-              <Input type="number" value={form.originalPrice} onChange={(event) => setForm((prev) => ({ ...prev, originalPrice: event.target.value }))} />
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Original price</span>
+              <Input type="number" value={form.originalPrice} onChange={(event) => setForm((prev) => ({ ...prev, originalPrice: event.target.value }))} className="rounded-xl" />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Discount</span>
-              <Input value={form.discount} onChange={(event) => setForm((prev) => ({ ...prev, discount: event.target.value }))} placeholder="40% OFF" />
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Discount</span>
+              <Input value={form.discount} onChange={(event) => setForm((prev) => ({ ...prev, discount: event.target.value }))} placeholder="40% OFF" className="rounded-xl" />
             </label>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Category</span>
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Category</span>
               <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100"
                 value={form.category}
                 onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
                 disabled={loadingCategories || categoryOptions.length === 0}
@@ -281,10 +308,11 @@ export default function AddProductsPage() {
                 ))}
               </select>
             </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Sizes</span>
+
+            <label className="text-sm md:col-span-2">
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Sizes</span>
               <div className="space-y-2">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {(form.category && categoryOptions.find((option) => option._id === form.category)?.slug?.toLowerCase() === "shoes" ? shoeSizes : standardSizes).map((size) => {
                     const selected = form.sizes
                       .split(",")
@@ -307,8 +335,8 @@ export default function AddProductsPage() {
 
                           setForm((prev) => ({ ...prev, sizes: updatedSizes.join(", ") }));
                         }}
-                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted"
+                        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                          selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:bg-slate-100"
                         }`}
                       >
                         {size}
@@ -319,25 +347,22 @@ export default function AddProductsPage() {
                 <Input
                   value={form.sizes}
                   onChange={(event) => setForm((prev) => ({ ...prev, sizes: event.target.value }))}
-                  placeholder={((form.category && categoryOptions.find((option) => option._id === form.category)?.slug?.toLowerCase() === "shoes") ? shoeSizes : standardSizes).join(", ")}
+                  placeholder="Or type custom sizes separated by commas"
+                  className="rounded-xl text-xs"
                 />
               </div>
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Colors</span>
-              <Input value={form.colors} onChange={(event) => setForm((prev) => ({ ...prev, colors: event.target.value }))} />
             </label>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Stock</span>
-              <Input type="number" value={form.stock} onChange={(event) => setForm((prev) => ({ ...prev, stock: event.target.value }))} required />
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Stock</span>
+              <Input type="number" value={form.stock} onChange={(event) => setForm((prev) => ({ ...prev, stock: event.target.value }))} required className="rounded-xl" />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Status</span>
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Status</span>
               <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100"
                 value={form.status}
                 onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as ProductStatus }))}
               >
@@ -346,48 +371,31 @@ export default function AddProductsPage() {
               </select>
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-muted-foreground">Choose local images</span>
-              <Input type="file" accept="image/*" multiple onChange={handleFileChange} />
-              {uploading ? <p className="mt-2 text-sm text-muted-foreground">Preparing images…</p> : null}
+              <span className="mb-1 block font-medium text-slate-700 dark:text-slate-300">Choose images</span>
+              <Input type="file" accept="image/*" multiple onChange={handleFileChange} className="rounded-xl text-xs file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700" />
+              {uploading ? <p className="mt-1 text-xs text-indigo-600 animate-pulse">Processing images…</p> : null}
             </label>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-border bg-background p-3">
-              <p className="text-sm font-semibold">Image previews</p>
-              {selectedPreviews.length > 0 ? (
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {selectedPreviews.map((preview, index) => (
-                    <img key={`${preview}-${index}`} src={preview} alt={`Selected product preview ${index + 1}`} className="h-24 w-full rounded-md object-cover" />
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">No images selected yet.</p>
-              )}
+          {selectedPreviews.length > 0 && (
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Image Previews</p>
+              <div className="grid grid-cols-4 gap-2">
+                {selectedPreviews.map((preview, index) => (
+                  <img key={`${preview}-${index}`} src={preview} alt="Preview" className="h-20 w-full rounded-lg object-cover border border-slate-200 dark:border-slate-800" />
+                ))}
+              </div>
             </div>
-            <div className="text-sm text-muted-foreground">
-              <p className="mb-1 font-medium text-foreground">Stored image sources</p>
-              {imageUrls.length > 0 || selectedPreviews.length > 0 ? (
-                <ul className="max-h-32 space-y-2 overflow-auto break-all rounded-md border border-border bg-background p-2">
-                  {[...selectedPreviews, ...imageUrls].map((source, index) => (
-                    <li key={`${source}-${index}`}>{source.slice(0, 120)}{source.length > 120 ? "…" : ""}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="rounded-md border border-dashed border-border bg-background p-3">No images stored yet.</p>
-              )}
-            </div>
-          </div>
+          )}
 
-          {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+          {message ? <p className="text-sm font-medium text-indigo-600">{message}</p> : null}
 
-          <div className="flex flex-wrap gap-3">
-            <Button type="submit" disabled={submitting || !isAdmin}>
-              {submitting ? "Creating..." : "Add product"}
+          <div className="flex flex-wrap gap-3 pt-2">
+            <Button type="submit" disabled={submitting || !isAdmin} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-6">
+              {submitting ? "Creating..." : "Add Product"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setLocation("/profile")}>Back to profile</Button>
-            <Button type="button" variant="secondary" onClick={() => setLocation("/products")}>View catalog</Button>
-            <Button type="button" variant="secondary" onClick={() => setLocation("/carousel-manager")}>Manage carousel</Button>
+            <Button type="button" variant="outline" onClick={() => setLocation("/profile")} className="rounded-xl">Back to Profile</Button>
+            <Button type="button" variant="secondary" onClick={() => setLocation("/products")} className="rounded-xl">View Catalog</Button>
           </div>
         </form>
       </div>

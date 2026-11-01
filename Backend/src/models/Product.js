@@ -63,6 +63,10 @@ const productSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  section: { type: String, 
+    enum: ['catalog', 'deal'], 
+    default: 'catalog' 
+  },
   createdAt: {
     type: Date,
     default: Date.now,
