@@ -570,6 +570,12 @@ const filteredDeals = dealItems.filter((product) => {
                               {product.discount}
                             </div>
                           ) : null}
+                          {/* > ADDED: Bottom-left size overlay badge (hides if empty or "N/A") */}
+                          {product.sizes && product.sizes.filter((s) => s !== "N/A").length > 0 && (
+                            <div className="absolute bottom-2 left-2 bg-slate-950/80 backdrop-blur-md text-white px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider shadow-md border border-white/10">
+                              Size: {product.sizes.filter((s) => s !== "N/A").join(", ")}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex flex-col flex-1 justify-between">
@@ -707,6 +713,12 @@ const filteredDeals = dealItems.filter((product) => {
                         <div className="absolute top-2.5 left-2.5 bg-rose-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-md">
                           {product.discount || "DEAL"}
                         </div>
+                        {/* > ADDED: Bottom-left size overlay badge for deals */}
+                        {product.sizes && product.sizes.filter((s) => s !== "N/A").length > 0 && (
+                          <div className="absolute bottom-2 left-2 bg-slate-950/80 backdrop-blur-md text-white px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider shadow-md border border-white/10">
+                            Size: {product.sizes.filter((s) => s !== "N/A").join(", ")}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-col flex-1 justify-between">

@@ -5,7 +5,7 @@ const { RateLimiterMemory } = require('rate-limiter-flexible');
 // duration: 3 (Refills 1 token every 3 seconds / or resets bucket every window)
 // 1 token allows 1 batch query of up to 69 items
 const productBatchLimiter = new RateLimiterMemory({
-  points: 3, 
+  points: 6, 
   duration: 3, // 3 batch queries allowed per three seconds
   blockDuration: 10, // Block for 10 seconds if bucket is exhausted
 });

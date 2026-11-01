@@ -7,7 +7,7 @@ exports.getProducts = async (req, res, next) => {
   try {
     const { 
       page = 1, 
-      limit = 12, 
+      limit = 138, 
       category, 
       size, 
       color, 
@@ -68,8 +68,8 @@ exports.getProducts = async (req, res, next) => {
     sortObj[sortField] = sortOrder === 'asc' ? 1 : -1;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const MAX_ALLOWED_LIMIT = 69; // Hard cap limit (24 catalog + 45 deals)
-    const requestedLimit = parseInt(limit, 10) || 12;
+    const MAX_ALLOWED_LIMIT = 138; // Hard cap limit (24 catalog + 45 deals)
+    const requestedLimit = parseInt(limit, 10) || 138;
     const limitNum = Math.min(Math.max(1, requestedLimit), MAX_ALLOWED_LIMIT);
     const skip = (pageNum - 1) * limitNum;
 
