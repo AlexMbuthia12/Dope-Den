@@ -7,7 +7,7 @@ exports.getProducts = async (req, res, next) => {
   try {
     const { 
       page = 1, 
-      limit = 69, 
+      limit = 12, 
       category, 
       size, 
       color, 
@@ -31,8 +31,18 @@ exports.getProducts = async (req, res, next) => {
       filter.category = category;
     }
 
-    if (section) {
-      filter.section = section;
+    // =========================================================================
+    // STRICT SECTION FILTERING (Ensures Catalog and Deals never bleed together)
+    // =========================================================================
+    if (section === 'deal') {
+      filter.section = 'deal'; // Only fetch products explicitly saved as deals
+    } else if (section === 'catalog') {
+      // Fetch products marked as catalog, plus any older legacy products without a section tag
+      filter.$or = [
+        { section: 'catalog' },
+        { section: { $exists: false } },
+        { section: null }
+      ];
     }
 
     if (size) {
@@ -53,29 +63,22 @@ exports.getProducts = async (req, res, next) => {
       filter.$text = { $search: search };
     }
 
-    // Parse sort parameter
     const sortObj = {};
     const [sortField, sortOrder] = sort.split('_');
     sortObj[sortField] = sortOrder === 'asc' ? 1 : -1;
 
-    // Calculate pagination
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    
-    // ENFORCE HARD CAP: Max 69 items per request (24 catalog + 45 deals limit)
-    const MAX_ALLOWED_LIMIT = 69; // 24 + 45
-    const requestedLimit = parseInt(limit, 10) || 69;
+    const MAX_ALLOWED_LIMIT = 69; // Hard cap limit (24 catalog + 45 deals)
+    const requestedLimit = parseInt(limit, 10) || 12;
     const limitNum = Math.min(Math.max(1, requestedLimit), MAX_ALLOWED_LIMIT);
-    
     const skip = (pageNum - 1) * limitNum;
 
-    // Execute query with max cap enforced
     const products = await Product.find(filter)
       .populate('category', 'name slug')
       .sort(sortObj)
       .skip(skip)
       .limit(limitNum);
 
-    // Get total count for metadata
     const totalProducts = await Product.countDocuments(filter);
     const totalPages = Math.ceil(totalProducts / limitNum);
 
@@ -95,7 +98,20 @@ exports.getProducts = async (req, res, next) => {
     });
   }
 };
-
+// // Get all products
+// exports.getAllProducts = async (req, res, next) => {
+//   try {
+//     const products = await Product.find().populate('category', 'name slug');
+//     res.status(200).json(products);
+//   } catch (error) {
+//     logger.error(`Error fetching all products: ${error.message}`);
+//     res.status(500).json({
+//       statusCode: 500,
+//       message: 'Error fetching all products',
+//       error: error.message,
+//     });
+//   }
+// };
 // Get single product by ID
 exports.getProductById = async (req, res, next) => {
   try {

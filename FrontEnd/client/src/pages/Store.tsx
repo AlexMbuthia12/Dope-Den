@@ -178,7 +178,11 @@ export default function Store() {
   // ---------------------------------------------------------------------------
   // Filtering & Local Pagination on Cached Batch Data
   // ---------------------------------------------------------------------------
-  const filteredCatalog = catalogItems.filter((product) => {
+const filteredCatalog = catalogItems.filter((product) => {
+    // FRONTEND SAFETY CHECK: Ensure item is strictly a catalog product (or legacy unassigned)
+    const isCatalog = !product.section || product.section === "catalog";
+    if (!isCatalog) return false;
+
     const matchesSearch =
       !search ||
       product.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -215,7 +219,11 @@ export default function Store() {
   );
 
   // Filtered & Paginated Deals (15 per page, 3 rows of 5)
-  const filteredDeals = dealItems.filter((product) => {
+const filteredDeals = dealItems.filter((product) => {
+    // FRONTEND SAFETY CHECK: Ensure item is strictly a deal product
+    const isDeal = product.section === "deal";
+    if (!isDeal) return false;
+
     if (dealCategoryFilter === "all") return true;
     return product.category?._id === dealCategoryFilter;
   });
