@@ -65,7 +65,39 @@ export default function Store() {
   const DEALS_ITEMS_PER_PAGE = 15; // 5 * 3
   const DEALS_BATCH_SIZE = 45; // 15 * 3
 
-  const [dealCategoryFilter, setDealCategoryFilter] = useState<string>("all");
+  // > CHANGED: Multi-select state for Deals parent and child categories
+  const [selectedDealParents, setSelectedDealParents] = useState<string[]>([]);
+  const [selectedDealChildren, setSelectedDealChildren] = useState<string[]>([]);
+
+  // > -------------------------------------------------------------
+  // > ADDED: Toggle handlers and dynamic child extraction for deals
+  // > -------------------------------------------------------------
+  const toggleDealParent = (parentId: string) => {
+    setSelectedDealParents((prev) => {
+      const exists = prev.includes(parentId);
+      const updatedParents = exists ? prev.filter((id) => id !== parentId) : [...prev, parentId];
+      
+      // Clean up selected children that no longer belong to any selected parent
+      const validParentNodes = categories.filter((cat) => updatedParents.includes(cat._id));
+      const validChildIds = validParentNodes.flatMap((cat) => (cat.children || []).map((c) => c._id));
+      setSelectedDealChildren((currChildren) => currChildren.filter((id) => validChildIds.includes(id)));
+      
+      return updatedParents;
+    });
+    setDealPage(1);
+  };
+
+  const toggleDealChild = (childId: string) => {
+    setSelectedDealChildren((prev) =>
+      prev.includes(childId) ? prev.filter((id) => id !== childId) : [...prev, childId]
+    );
+    setDealPage(1);
+  };
+
+  // Get all children belonging to currently selected parent categories
+  const availableDealChildren = categories
+    .filter((cat) => selectedDealParents.includes(cat._id))
+    .flatMap((cat) => cat.children || []);
 
   useEffect(() => {
     void loadInitialData();
@@ -218,14 +250,30 @@ const filteredCatalog = catalogItems.filter((product) => {
     catalogPage * CATALOG_ITEMS_PER_PAGE
   );
 
-  // Filtered & Paginated Deals (15 per page, 3 rows of 5)
-const filteredDeals = dealItems.filter((product) => {
-    // FRONTEND SAFETY CHECK: Ensure item is strictly a deal product
-    const isDeal = product.section === "deal";
-    if (!isDeal) return false;
 
-    if (dealCategoryFilter === "all") return true;
-    return product.category?._id === dealCategoryFilter;
+  // > CHANGED: Deals filtering supporting multi-parent and child narrowing
+  const filteredDeals = dealItems.filter((product) => {
+    const productCatId = product.category?._id;
+
+    // If parent categories are selected
+    if (selectedDealParents.length > 0) {
+      if (!productCatId) return false;
+
+      // Check if product belongs directly to a selected parent, or is a child under a selected parent
+      const isSelectedParent = selectedDealParents.includes(productCatId);
+      const isChildOfSelectedParent = categories
+        .filter((cat) => selectedDealParents.includes(cat._id))
+        .some((parent) => parent.children?.some((child) => child._id === productCatId));
+
+      if (!isSelectedParent && !isChildOfSelectedParent) return false;
+    }
+
+    // If specific child categories are selected within those parents
+    if (selectedDealChildren.length > 0) {
+      if (!productCatId || !selectedDealChildren.includes(productCatId)) return false;
+    }
+
+    return true;
   });
 
   const totalDealPages = Math.ceil(filteredDeals.length / DEALS_ITEMS_PER_PAGE) || 1;
@@ -660,33 +708,67 @@ const filteredDeals = dealItems.filter((product) => {
               </p>
             </div>
 
-            {/* Horizontal Filter Row */}
-            <div className="mb-8 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-              <button
-                type="button"
-                onClick={() => { setDealCategoryFilter("all"); setDealPage(1); }}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm ${
-                  dealCategoryFilter === "all"
-                    ? "bg-rose-600 text-white shadow-rose-600/30"
-                    : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50"
-                }`}
-              >
-                All Deals
-              </button>
-              {categories.map((cat) => (
+           {/* > ------------------------------------------------------------- */}
+            {/* > CHANGED: Two-tier filter rows for Deals (Parents + Conditional Children) */}
+            {/* > ------------------------------------------------------------- */}
+            <div className="space-y-3 mb-8">
+              {/* Row 1: Parent Categories */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
                 <button
-                  key={`deal-cat-${cat._id}`}
                   type="button"
-                  onClick={() => { setDealCategoryFilter(cat._id); setDealPage(1); }}
+                  onClick={() => { setSelectedDealParents([]); setSelectedDealChildren([]); setDealPage(1); }}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm ${
-                    dealCategoryFilter === cat._id
+                    selectedDealParents.length === 0
                       ? "bg-rose-600 text-white shadow-rose-600/30"
                       : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50"
                   }`}
                 >
-                  {cat.name}
+                  All Deals
                 </button>
-              ))}
+                {categories.map((cat) => {
+                  const isSelected = selectedDealParents.includes(cat._id);
+                  return (
+                    <button
+                      key={`deal-parent-${cat._id}`}
+                      type="button"
+                      onClick={() => toggleDealParent(cat._id)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm ${
+                        isSelected
+                          ? "bg-rose-600 text-white shadow-rose-600/30 ring-2 ring-rose-600/20"
+                          : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Row 2: Children Categories (Appears only when parent(s) with children are selected) */}
+              {availableDealChildren.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 pl-2 border-l-2 border-rose-500/40 scrollbar-none animate-in fade-in duration-300">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1 whitespace-nowrap">
+                    Subcategories:
+                  </span>
+                  {availableDealChildren.map((child) => {
+                    const isSelected = selectedDealChildren.includes(child._id);
+                    return (
+                      <button
+                        key={`deal-child-${child._id}`}
+                        type="button"
+                        onClick={() => toggleDealChild(child._id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shadow-sm ${
+                          isSelected
+                            ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-md"
+                            : "bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                        }`}
+                      >
+                        {child.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {paginatedDeals.length === 0 ? (
